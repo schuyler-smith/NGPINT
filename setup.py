@@ -5,13 +5,11 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="NGPINT", # Replace with your own username
-    version="1.0.0",
-    author="Sagnik Banerjee",
-    author_email="sagnik@iastate.edu",
+    version="1.0.1",
     description="NGPINT: A next-generation protein-protein interaction software",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/Wiselab2/NGPINT/archive/NGPINTv1.0.0.tar.gz",
+    url="https://github.com/Wiselab2/NGPINT",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",

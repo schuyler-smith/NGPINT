@@ -1,75 +1,92 @@
-FROM bioconductor/bioconductor_docker:devel
-MAINTAINER Sagnik Banerjee <sagnikbanerjee15@gmail.com>
-
-ENV TZ=America/New_York
+FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get -y update
-RUN apt-get -y install libcurl4-doc libidn11-dev libkrb5-dev libldap2-dev librtmp-dev libssh2-1-dev git python3 curl libboost-all-dev apt-transport-https less vim wget time zlib1g zlib1g-dev lzma-dev libssl-dev libncurses5-dev libxml2-dev libxml2 liblzma-dev libncursesw5-dev make unzip zip build-essential gcc g++ cmake ca-certificates libbz2-dev xz-utils htop autoconf automake binutils bison flex gettext libtool make patch pkg-config dirmngr gnupg apt-transport-https ca-certificates software-properties-common r-base texlive-latex-base texlive-latex-extra python3-distutils trimmomatic
-RUN wget https://bootstrap.pypa.io/get-pip.py && python3 get-pip.py
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends \
+    ca-certificates \
+    wget curl \
+    zip unzip gzip \
+    make autoconf automake pkg-config build-essential \
+    zlib1g-dev libbz2-dev libltdl-dev libtool \
+    libcurl4-openssl-dev \
+    libxml2-dev \
+    libgdal-dev \
+    libssl-dev \
+    default-jre-headless \
+    perl \
+    python3-dev python3-pip \
+    r-base r-base-core r-base-dev \
+    git \
+  && apt-get upgrade --yes \
+  && apt-get clean
+  
 RUN pip install ruffus
 
-RUN apt-get clean all
+RUN apt-get install --no-install-recommends --yes \
+    locales \
+  && echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen \
+  && locale-gen en_US.utf8 \
+  && /usr/sbin/update-locale LANG=en_US.UTF-8
+  ENV LC_ALL=en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US.UTF-8
 
-# Install Trimmomatic
-RUN chmod a+x /usr/share/java/trimmomatic.jar
-ENV PATH ${PATH}:/usr/share/java
+COPY ./R_install /tmp/R_install
+RUN /tmp/R_install/install2.r --error --skipinstalled \
+    BiocManager \
+  && /tmp/R_install/installBioc.r --error --skipinstalled --deps \
+    DESeq2
 
-# Install DESeq2
-RUN R -e 'BiocManager::install("DESeq2")'
+WORKDIR /opt
+ENV PATH ${PATH}:/opt/
 
-# Make directory for installation
-RUN mkdir /software
+ARG PROGRAM="Trimmomatic"
+ARG VERSION="0.39"
+RUN wget https://github.com/usadellab/Trimmomatic/files/5854859/Trimmomatic-${VERSION}.zip \
+    -O ${PROGRAM}.zip \
+    && unzip ${PROGRAM}.zip \
+    && rm -rf ${PROGRAM}.zip \
+    && echo '#!/bin/bash' > trimmomatic \
+    && echo "java -jar ${PWD}/${PROGRAM}-${VERSION}/trimmomatic-${VERSION}.jar \${@}" >> trimmomatic \
+    && chmod +x trimmomatic \
+    && cp -r ${PROGRAM}-${VERSION}/adapters ./
 
-# Install STAR
-ARG STAR_VERSION=2.7.9a
-RUN mkdir -p /software/STAR_${STAR_VERSION}
-RUN cd /software/STAR_${STAR_VERSION} && \
-	wget --no-check-certificate https://github.com/alexdobin/STAR/archive/${STAR_VERSION}.zip && \
-	unzip ${STAR_VERSION}.zip && \
-	cd STAR-${STAR_VERSION}/source && \
-	make STAR STARlong
+# STAR
+ARG VERSION="2.7.9a"
+RUN wget https://github.com/alexdobin/STAR/archive/${VERSION}.zip \
+  && unzip ${VERSION}.zip \
+  && rm ${VERSION}.zip \
+  && make -C STAR-${VERSION}/source STAR STARlong
+ENV PATH ${PATH}:/opt/STAR_${VERSION}/STAR-${VERSION}/bin/Linux_x86_64
 
-ENV PATH ${PATH}:/software/STAR_${STAR_VERSION}/STAR-${STAR_VERSION}/bin/Linux_x86_64
+# Samtools
+ARG VERSION="1.14"
+RUN wget https://github.com/samtools/samtools/releases/download/${VERSION}/samtools-${VERSION}.tar.bz2 \
+  && tar jxf samtools-${VERSION}.tar.bz2 \
+  && rm samtools-${VERSION}.tar.bz2 \
+  && make -C samtools-${VERSION} \
+  && make -C samtools-${VERSION} install
 
-# Install Samtools
-ARG SAMTOOLS_VERSION=1.14
-RUN mkdir -p /software/samtools_${SAMTOOLS_VERSION}
-RUN cd /software/samtools_${SAMTOOLS_VERSION} && \
-	wget https://github.com/samtools/samtools/releases/download/${SAMTOOLS_VERSION}/samtools-${SAMTOOLS_VERSION}.tar.bz2 && \
-	tar jxf samtools-${SAMTOOLS_VERSION}.tar.bz2 && \
-	cd samtools-${SAMTOOLS_VERSION} && make && make install
+# Salmon
+ARG VERSION="1.5.2"
+RUN wget https://github.com/COMBINE-lab/salmon/releases/download/v${VERSION}/salmon-${VERSION}_linux_x86_64.tar.gz \
+  && tar xzf salmon-${VERSION}_linux_x86_64.tar.gz \
+  && rm salmon-${VERSION}_linux_x86_64.tar.gz
+ENV PATH ${PATH}:/opt/salmon-${VERSION}_linux_x86_64/bin/
 
+# gffread
+ARG VERSION="0.12.7"
+RUN wget https://github.com/gpertea/gffread/releases/download/v${VERSION}/gffread-${VERSION}.Linux_x86_64.tar.gz \
+  && tar xzf gffread-${VERSION}.Linux_x86_64.tar.gz \
+  && rm gffread-${VERSION}.Linux_x86_64.tar.gz
+ENV PATH ${PATH}:/opt/gffread-${VERSION}.Linux_x86_64/
 
-
-# Install salmon
-ARG SALMON_VERSION=1.5.2
-RUN mkdir -p /software/salmon_${SALMON_VERSION}
-RUN cd /software/salmon_${SALMON_VERSION} && \
-	wget https://github.com/COMBINE-lab/salmon/releases/download/v${SALMON_VERSION}/salmon-${SALMON_VERSION}_linux_x86_64.tar.gz && \
-	tar xzf salmon-${SALMON_VERSION}_linux_x86_64.tar.gz && \
-	cd salmon-${SALMON_VERSION}_linux_x86_64
-
-
-ENV PATH ${PATH}:/software/salmon_${SALMON_VERSION}/salmon-${SALMON_VERSION}_linux_x86_64/bin
-
-# Download gffread
-ARG GFFREAD_VERSION=0.12.7
-RUN mkdir -p /software/gffread_${GFFREAD_VERSION} # to force download
-RUN cd /software/gffread_${GFFREAD_VERSION} && \
-	wget --no-check-certificate https://github.com/gpertea/gffread/releases/download/v${GFFREAD_VERSION}/gffread-${GFFREAD_VERSION}.Linux_x86_64.tar.gz && \
-	tar xzf gffread-${GFFREAD_VERSION}.Linux_x86_64.tar.gz && \
-	chmod a+x gffread-${GFFREAD_VERSION}.Linux_x86_64/gffread
-
-ENV PATH ${PATH}:/software/gffread_${GFFREAD_VERSION}/gffread-${GFFREAD_VERSION}.Linux_x86_64/
+# NGPINT
+ARG VERSION="1.0.0"
+RUN wget https://github.com/Wiselab2/NGPINT/archive/refs/tags/NGPINTv${VERSION}.tar.gz \
+  && tar -xzf NGPINTv${VERSION}.tar.gz \
+  && rm NGPINTv${VERSION}.tar.gz
 
 
-# Download and install NGPINT
-ARG NGPINT_VERSION=1.0.0
-RUN mkdir -p /software/ngpint_${NGPINT_VERSION} 
-RUN cd /software/ngpint_${NGPINT_VERSION} && \
-	wget --no-check-certificate https://github.com/sagnikbanerjee15/NGPINT/archive/refs/tags/NGPINTv${NGPINT_VERSION}.tar.gz && \
-	tar -xzf NGPINTv${NGPINT_VERSION}.tar.gz
-RUN chmod a+x /software/ngpint_${NGPINT_VERSION}/NGPINTv${NGPINT_VERSION}/ngpint
 
-ENV PATH ${PATH}:/software/ngpint_${NGPINT_VERSION}/NGPINT
+CMD ["/bin/bash"]
