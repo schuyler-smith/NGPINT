@@ -14,28 +14,31 @@ RUN apt-get update \
     libssl-dev \
     default-jre-headless \
     perl \
-    python3-dev python3-pip \
-    r-base r-base-core r-base-dev \
     git \
   && apt-get upgrade --yes \
   && apt-get clean
-  
+
+RUN apt-get install --no-install-recommends --yes \
+  python3-dev \
+  python3-pip
 RUN pip install ruffus
 
 RUN apt-get install --no-install-recommends --yes \
-    locales \
+  r-base \
+  r-base-core \
+  r-base-dev \
+  r-recommended \
+  && apt-get clean 
+RUN apt-get install --no-install-recommends --yes \
+  locales \
   && echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen \
   && locale-gen en_US.utf8 \
   && /usr/sbin/update-locale LANG=en_US.UTF-8
-  ENV LC_ALL=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
 ENV LANG=en_US.UTF-8
-ENV LANGUAGE=en_US.UTF-8
 
-COPY ./R_install /tmp/R_install
-RUN /tmp/R_install/install2.r --error --skipinstalled \
-    BiocManager \
-  && /tmp/R_install/installBioc.r --error --skipinstalled --deps \
-    DESeq2
+RUN R -e 'install.packages("BiocManager")'
+RUN R -e 'BiocManager::install("DESeq2")'
 
 WORKDIR /opt
 ENV PATH ${PATH}:/opt/
@@ -43,50 +46,57 @@ ENV PATH ${PATH}:/opt/
 ARG PROGRAM="Trimmomatic"
 ARG VERSION="0.39"
 RUN wget https://github.com/usadellab/Trimmomatic/files/5854859/Trimmomatic-${VERSION}.zip \
-    -O ${PROGRAM}.zip \
-    && unzip ${PROGRAM}.zip \
-    && rm -rf ${PROGRAM}.zip \
-    && echo '#!/bin/bash' > trimmomatic \
-    && echo "java -jar ${PWD}/${PROGRAM}-${VERSION}/trimmomatic-${VERSION}.jar \${@}" >> trimmomatic \
-    && chmod +x trimmomatic \
-    && cp -r ${PROGRAM}-${VERSION}/adapters ./
+  -O ${PROGRAM}.zip \
+  && unzip ${PROGRAM}.zip \
+  && rm -rf ${PROGRAM}.zip \
+  && echo '#!/bin/bash' > /opt/${PROGRAM}-${VERSION}/trimmomatic \
+  && echo "java -jar ${PWD}/${PROGRAM}-${VERSION}/trimmomatic-${VERSION}.jar \${@}" >> trimmomatic \
+  && chmod +x trimmomatic \
+  && cp -r ${PROGRAM}-${VERSION}/adapters ./
+ENV PATH ${PATH}:/opt/${PROGRAM}-${VERSION}/
 
-# STAR
+ARG PROGRAM="STAR"
 ARG VERSION="2.7.9a"
-RUN wget https://github.com/alexdobin/STAR/archive/${VERSION}.zip \
-  && unzip ${VERSION}.zip \
-  && rm ${VERSION}.zip \
-  && make -C STAR-${VERSION}/source STAR STARlong
-ENV PATH ${PATH}:/opt/STAR_${VERSION}/STAR-${VERSION}/bin/Linux_x86_64
+RUN wget https://github.com/alexdobin/${PROGRAM}/archive/${VERSION}.zip \
+  -O ${PROGRAM}.zip \
+  && unzip ${PROGRAM}.zip \
+  && rm ${PROGRAM}.zip \
+  && make -C ${PROGRAM}-${VERSION}/source STAR STARlong
+ENV PATH ${PATH}:/opt/${PROGRAM}-${VERSION}/bin/Linux_x86_64
 
-# Samtools
+ARG PROGRAM="samtools"
 ARG VERSION="1.14"
-RUN wget https://github.com/samtools/samtools/releases/download/${VERSION}/samtools-${VERSION}.tar.bz2 \
-  && tar jxf samtools-${VERSION}.tar.bz2 \
-  && rm samtools-${VERSION}.tar.bz2 \
-  && make -C samtools-${VERSION} \
-  && make -C samtools-${VERSION} install
+RUN wget https://github.com/samtools/samtools/releases/download/${VERSION}/${PROGRAM}-${VERSION}.tar.bz2 \
+  -O ${PROGRAM}.tar.bz2 \
+  && tar jxf ${PROGRAM}.tar.bz2 \
+  && rm ${PROGRAM}.tar.bz2 \
+  && make -C ${PROGRAM}-${VERSION} \
+  && make -C ${PROGRAM}-${VERSION} install
 
-# Salmon
+ARG PROGRAM="salmon"
 ARG VERSION="1.5.2"
-RUN wget https://github.com/COMBINE-lab/salmon/releases/download/v${VERSION}/salmon-${VERSION}_linux_x86_64.tar.gz \
-  && tar xzf salmon-${VERSION}_linux_x86_64.tar.gz \
-  && rm salmon-${VERSION}_linux_x86_64.tar.gz
-ENV PATH ${PATH}:/opt/salmon-${VERSION}_linux_x86_64/bin/
+RUN wget https://github.com/COMBINE-lab/${PROGRAM}/releases/download/v${VERSION}/${PROGRAM}-${VERSION}_linux_x86_64.tar.gz \
+  -O ${PROGRAM}.tar.gz \
+  && tar xzf ${PROGRAM}.tar.gz \
+  && rm ${PROGRAM}.tar.gz
+ENV PATH ${PATH}:/opt/${PROGRAM}-${VERSION}_linux_x86_64/bin/
 
-# gffread
+ARG PROGRAM="gffread"
 ARG VERSION="0.12.7"
-RUN wget https://github.com/gpertea/gffread/releases/download/v${VERSION}/gffread-${VERSION}.Linux_x86_64.tar.gz \
-  && tar xzf gffread-${VERSION}.Linux_x86_64.tar.gz \
-  && rm gffread-${VERSION}.Linux_x86_64.tar.gz
-ENV PATH ${PATH}:/opt/gffread-${VERSION}.Linux_x86_64/
+RUN wget https://github.com/gpertea/${PROGRAM}/releases/download/v${VERSION}/${PROGRAM}-${VERSION}.Linux_x86_64.tar.gz \
+  -O ${PROGRAM}.tar.gz \
+  && tar xzf ${PROGRAM}.tar.gz \
+  && rm ${PROGRAM}.tar.gz
+ENV PATH ${PATH}:/opt/${PROGRAM}-${VERSION}.Linux_x86_64/
 
-# NGPINT
+ARG PROGRAM="NGPINT"
 ARG VERSION="1.0.0"
 RUN wget https://github.com/Wiselab2/NGPINT/archive/refs/tags/NGPINTv${VERSION}.tar.gz \
-  && tar -xzf NGPINTv${VERSION}.tar.gz \
-  && rm NGPINTv${VERSION}.tar.gz
+  -O ${PROGRAM}.tar.gz \
+  && tar -xzf ${PROGRAM}.tar.gz \
+  && rm ${PROGRAM}.tar.gz
 
 
+RUN ln -s /usr/bin/python3 /usr/bin/python
 
 CMD ["/bin/bash"]
